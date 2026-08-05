@@ -83,4 +83,68 @@ describe('scanner', () => {
     expect(result.files[0].path).toBe('src/index.ts');
     expect(result.excludedCount).toBe(3); // .env, pnpm-lock.yaml, secret.pem
   });
+
+  it('should flag a file with securityWarning if it contains a secret and increment filesWithSecretWarnings', async () => {
+    const mockFiles: Record<string, any[]> = {
+      '/root': [
+        { name: 'config.ts', isDirectory: () => false, isFile: () => true },
+        { name: 'clean.ts', isDirectory: () => false, isFile: () => true }
+      ]
+    };
+
+    vi.mocked(fs.readdirSync).mockImplementation((path: any) => mockFiles[path] || []);
+    vi.mocked(fs.statSync).mockImplementation(() => ({ size: 500 } as any));
+    
+    vi.mocked(fs.readFileSync).mockImplementation((path: any) => {
+      if (path === '/root/config.ts') {
+        return 'const key = "sk-abcdefghijklmnopqrstuvwxyz12345";';
+      }
+      return 'console.log("hello");';
+    });
+
+    const result = await scanDirectory('/root', []);
+    
+    expect(result.files).toHaveLength(2);
+    expect(result.filesWithSecretWarnings).toBe(1);
+
+    const config = result.files.find(f => f.path === 'config.ts');
+    expect(config?.securityWarning).toBe('OpenAI-style key');
+
+    const clean = result.files.find(f => f.path === 'clean.ts');
+    expect(clean?.securityWarning).toBeUndefined();
+  });
+
+  it('should skip secret scanning for large files or non-text files', async () => {
+    const mockFiles: Record<string, any[]> = {
+      '/root': [
+        { name: 'large-config.ts', isDirectory: () => false, isFile: () => true },
+        { name: 'video.mp4', isDirectory: () => false, isFile: () => true }
+      ]
+    };
+
+    vi.mocked(fs.readdirSync).mockImplementation((path: any) => mockFiles[path] || []);
+    
+    vi.mocked(fs.statSync).mockImplementation((path: any) => {
+      if (path === '/root/large-config.ts') {
+        return { size: 2 * 1024 * 1024 } as any; // 2MB
+      }
+      return { size: 500 } as any;
+    });
+
+    vi.mocked(fs.readFileSync).mockImplementation(() => 'const key = "sk-abcdefghijklmnopqrstuvwxyz12345";');
+
+    const result = await scanDirectory('/root', []);
+    
+    expect(result.files).toHaveLength(2);
+    expect(result.filesWithSecretWarnings).toBe(0);
+
+    const large = result.files.find(f => f.path === 'large-config.ts');
+    expect(large?.securityWarning).toBeUndefined();
+    
+    const video = result.files.find(f => f.path === 'video.mp4');
+    expect(video?.securityWarning).toBeUndefined();
+    
+    // readFileSync should never be called because the files are filtered out
+    expect(fs.readFileSync).not.toHaveBeenCalled();
+  });
 });

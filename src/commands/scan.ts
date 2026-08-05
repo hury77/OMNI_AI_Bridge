@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import path from 'path';
 import fs from 'fs';
+import chalk from 'chalk';
 import { loadConfig } from '../core/config.js';
 import { scanDirectory } from '../core/scanner.js';
 
@@ -34,7 +35,8 @@ export const scanCommand = new Command('scan')
       summary: {
         totalFiles: result.files.length,
         totalSizeBytes: result.files.reduce((acc, f) => acc + f.size, 0),
-        excludedCount: result.excludedCount
+        excludedCount: result.excludedCount,
+        filesWithSecretWarnings: result.filesWithSecretWarnings
       },
       files: result.files
     };
@@ -52,4 +54,8 @@ export const scanCommand = new Command('scan')
     console.log(`- Total Size: ${(manifest.summary.totalSizeBytes / 1024).toFixed(2)} KB`);
     console.log(`- Excluded Files/Directories: ${manifest.summary.excludedCount}`);
     console.log(`\nManifest saved to .omniqa/index/project-manifest.json`);
+
+    if (manifest.summary.filesWithSecretWarnings > 0) {
+      console.log(chalk.yellow(`\n⚠ Found potential secrets in ${manifest.summary.filesWithSecretWarnings} file(s). See manifest for details.`));
+    }
   });
