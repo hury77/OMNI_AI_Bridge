@@ -2,6 +2,10 @@ version: "1.0"
 project:
   name: omniqa-ai-bridge
   type: custom
+ai:
+  provider: mock
+  model: "llama3:latest"
+  baseUrl: "http://localhost:11434"
 context:
   ignore_patterns:
     - node_modules

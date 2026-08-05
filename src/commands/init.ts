@@ -39,6 +39,11 @@ export const initCommand = new Command('init')
           name: path.basename(cwd),
           type: "custom"
         },
+        ai: {
+          provider: "mock",
+          model: "llama3:latest",
+          baseUrl: "http://localhost:11434"
+        },
         context: {
           ignore_patterns: [
             "node_modules",

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { initCommand } from './commands/init.js';
 import { scanCommand } from './commands/scan.js';
+import { askCommand } from './commands/ask.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -27,5 +28,6 @@ program
 
 program.addCommand(initCommand);
 program.addCommand(scanCommand);
+program.addCommand(askCommand);
 
 program.parse(process.argv);

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { isRestrictedFile } from './security.js';
 
 export interface FileMetadata {
   path: string;
@@ -20,6 +21,10 @@ export async function scanDirectory(
   
   // Simple substring/exact check for MVP 0.
   function isIgnored(itemName: string, relPath: string): boolean {
+    if (isRestrictedFile(itemName)) {
+      return true;
+    }
+
     return ignorePatterns.some(pattern => {
       // Basic check: if the name is strictly the pattern or if path contains the pattern
       if (pattern === itemName) return true;
