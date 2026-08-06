@@ -1,7 +1,7 @@
 import { AIProvider, AIProviderRequest, AIProviderResponse } from './ai-provider.interface.js';
 
 export class OllamaProvider implements AIProvider {
-  name = 'OllamaProvider';
+  readonly name = 'ollama';
 
   constructor(private baseUrl: string, private model: string) {}
 

@@ -9,6 +9,9 @@ export interface AIProviderResponse {
 }
 
 export interface AIProvider {
-  name: string;
+  /**
+   * The technical name of the provider (e.g., 'mock', 'ollama')
+   */
+  readonly name: string;
   send(request: AIProviderRequest): Promise<AIProviderResponse>;
 }

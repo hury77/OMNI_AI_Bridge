@@ -1,7 +1,7 @@
 import { AIProvider, AIProviderRequest, AIProviderResponse } from './ai-provider.interface.js';
 
 export class MockProvider implements AIProvider {
-  name = 'MockProvider';
+  readonly name = 'mock';
 
   async send(request: AIProviderRequest): Promise<AIProviderResponse> {
     return {

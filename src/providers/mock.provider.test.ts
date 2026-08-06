@@ -5,7 +5,7 @@ describe('MockProvider', () => {
   it('should return a deterministic echo response', async () => {
     const provider = new MockProvider();
     
-    expect(provider.name).toBe('MockProvider');
+    expect(provider.name).toBe('mock');
     
     const response = await provider.send({ prompt: 'Hello world' });
     
