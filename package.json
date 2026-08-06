@@ -11,6 +11,7 @@
     "build": "tsc",
     "start": "node ./bin/omniqa.js",
     "dev": "tsc -w",
+    "pretest": "pnpm run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },

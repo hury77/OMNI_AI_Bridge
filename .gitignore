@@ -111,5 +111,5 @@ dist
 .DS_Store
 
 # OmniQA specific
-.omniqa/runs
-.omniqa/index
+.omniqa/runs/
+.omniqa/index/
