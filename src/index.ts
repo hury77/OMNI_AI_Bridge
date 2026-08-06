@@ -3,6 +3,7 @@ import { initCommand } from './commands/init.js';
 import { scanCommand } from './commands/scan.js';
 import { askCommand } from './commands/ask.js';
 import { devCommand } from './commands/dev.js';
+import { applyCommand } from './commands/apply.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -31,5 +32,6 @@ program.addCommand(initCommand);
 program.addCommand(scanCommand);
 program.addCommand(askCommand);
 program.addCommand(devCommand);
+program.addCommand(applyCommand);
 
 program.parse(process.argv);

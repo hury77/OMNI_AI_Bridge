@@ -56,7 +56,7 @@ export const devCommand = new Command('dev')
       } else {
         // Generate Diff
         const diffPath = path.join(ctx.runsDir, 'proposed.diff');
-        const patch = generateUnifiedDiff(ctx.contextContent, newContent, ctx.fileName);
+        const patch = generateUnifiedDiff(ctx.contextContent, newContent, ctx.relativePath);
         fs.writeFileSync(diffPath, patch, 'utf8');
 
         ctx.saveResult({

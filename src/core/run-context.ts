@@ -64,6 +64,7 @@ export function setupRunContext(options: SetupRunContextOptions) {
   const filePath = path.resolve(cwd, options.file);
   const contextFilePath = filePath;
   const fileName = path.basename(filePath);
+  const relativePath = path.relative(cwd, filePath);
 
   const basePayload = {
     timestamp: now.toISOString(),
@@ -126,6 +127,7 @@ export function setupRunContext(options: SetupRunContextOptions) {
     resultPath,
     contextContent,
     fileName,
+    relativePath,
     saveResult
   };
 }
