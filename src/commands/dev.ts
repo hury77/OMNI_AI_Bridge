@@ -8,16 +8,20 @@ import { sanitizeAIOutput, generateUnifiedDiff } from '../core/diff-generator.js
 export const devCommand = new Command('dev')
   .description('Ask AI to modify a file and generate a patch')
   .argument('<task>', 'Description of what needs to be changed')
-  .requiredOption('-f, --file <path>', 'The file to modify (required)')
+  .requiredOption('-f, --file <path>', 'The target file to modify (required)')
+  .option('--context-files <paths>', 'Comma-separated list of additional files for read-only context')
+  .option('--context-dir <path>', 'A directory of additional files for read-only context (recursive)')
   .option('-p, --provider <name>', 'Override AI provider')
   .option('-m, --model <name>', 'Override AI model')
-  .action(async (task: string, options: { provider?: string, model?: string, file: string }) => {
+  .action(async (task: string, options: { provider?: string, model?: string, file: string, contextFiles?: string, contextDir?: string }) => {
     let ctx;
     
     try {
       ctx = setupRunContext({
         commandName: 'dev',
         file: options.file,
+        files: options.contextFiles ? options.contextFiles.split(',').map(f => f.trim()) : undefined,
+        dir: options.contextDir,
         providerOverride: options.provider,
         modelOverride: options.model,
         prompt: task
@@ -36,15 +40,16 @@ export const devCommand = new Command('dev')
     console.log(chalk.dim(`Task: ${task}`));
 
     // Build Prompt with System Instruction
-    const systemInstruction = `[SYSTEM]: You are an automated code editor. You must return ONLY the complete, fully updated content of the file. Do not include any explanations, greetings, or markdown code blocks (like \`\`\`). Preserve the original code style, indentation, and formatting except where the requested change requires otherwise. Provide the raw text exactly as it should be saved.`;
-    const fullPrompt = `${systemInstruction}\n\nTask:\n${task}\n\nFile Content to modify:\n${ctx.contextContent}`;
+    const systemInstruction = `[SYSTEM]: You are an automated code editor. You must return ONLY the complete, fully updated content of the target file. Do not include any explanations, greetings, or markdown code blocks (like \`\`\`). Preserve the original code style, indentation, and formatting except where the requested change requires otherwise. Provide the raw text exactly as it should be saved.`;
+    const backgroundContext = ctx.contextString ? `Background Context:\n${ctx.contextString}\n\n` : '';
+    const fullPrompt = `${systemInstruction}\n\n${backgroundContext}Task:\n${task}\n\nFile Content to modify:\n${ctx.targetContent}`;
 
     try {
       const response = await ctx.provider.send({ prompt: fullPrompt, context: undefined });
       
       const newContent = sanitizeAIOutput(response.text);
 
-      if (newContent.trim() === ctx.contextContent.trim()) {
+      if (newContent.trim() === ctx.targetContent!.trim()) {
         // No changes
         ctx.saveResult({
           status: "no-changes",
@@ -56,7 +61,10 @@ export const devCommand = new Command('dev')
       } else {
         // Generate Diff
         const diffPath = path.join(ctx.runsDir, 'proposed.diff');
-        const patch = generateUnifiedDiff(ctx.contextContent, newContent, ctx.relativePath);
+        // ctx.targetFile from result is a relative path which generateUnifiedDiff uses as well.
+        // Wait, previously it was ctx.relativePath which was `path.relative(cwd, filePath)`.
+        // ctx.targetFile is precisely that.
+        const patch = generateUnifiedDiff(ctx.targetContent!, newContent, ctx.targetFile!);
         fs.writeFileSync(diffPath, patch, 'utf8');
 
         ctx.saveResult({

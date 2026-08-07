@@ -3,24 +3,21 @@ import fs from 'fs';
 import chalk from 'chalk';
 import { loadConfig } from './config.js';
 import { getGitInfo } from './git-info.js';
-import { isRestrictedFile, scanContentForSecrets } from './security.js';
 import { AIProvider } from '../providers/ai-provider.interface.js';
 import { MockProvider } from '../providers/mock.provider.js';
 import { OllamaProvider } from '../providers/ollama.provider.js';
+import { buildContext, SecurityBlockError, ContextFileMeta } from './context-builder.js';
+
+export { SecurityBlockError };
 
 export interface SetupRunContextOptions {
   commandName: string;
-  file: string;
+  file?: string;
+  files?: string[];
+  dir?: string;
   providerOverride?: string;
   modelOverride?: string;
   prompt: string;
-}
-
-export class SecurityBlockError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'SecurityBlockError';
-  }
 }
 
 export function setupRunContext(options: SetupRunContextOptions) {
@@ -61,22 +58,19 @@ export function setupRunContext(options: SetupRunContextOptions) {
   const resultPath = path.join(runsDir, 'result.json');
   
   const gitInfo = getGitInfo();
-  const filePath = path.resolve(cwd, options.file);
-  const contextFilePath = filePath;
-  const fileName = path.basename(filePath);
-  const relativePath = path.relative(cwd, filePath);
+  
+  // Ensure run directory exists early so we can save 'blocked' result if needed
+  fs.mkdirSync(runsDir, { recursive: true });
 
   const basePayload = {
     timestamp: now.toISOString(),
     prompt: options.prompt,
-    contextFile: contextFilePath,
     providerName: provider.name,
     model: modelName,
     ...gitInfo
   };
 
   const saveResult = (partialPayload: Record<string, any>) => {
-    fs.mkdirSync(runsDir, { recursive: true });
     // partialPayload overwrites basePayload properties if there is a conflict (e.g. status)
     const finalPayload = {
       ...basePayload,
@@ -86,38 +80,44 @@ export function setupRunContext(options: SetupRunContextOptions) {
     return finalPayload;
   };
 
-  // Security checks
-  if (!filePath.startsWith(cwd)) {
-    throw new Error(`File path must be within the current working directory.`);
-  }
-
-  if (isRestrictedFile(fileName)) {
-    throw new Error(`Security violation. Cannot include restricted file: ${fileName}`);
-  }
-
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`File not found: ${filePath}`);
-  }
-
-  const stats = fs.statSync(filePath);
-  if (stats.size > 1024 * 1024) {
-    throw new Error(`File is too large (>1MB): ${filePath}`);
-  }
-
-  const contextContent = fs.readFileSync(filePath, 'utf8');
-  
-  const scanResult = scanContentForSecrets(contextContent);
-  if (scanResult.found) {
-    saveResult({
-      status: "blocked",
-      detectedSecretType: scanResult.type,
-      response: null
+  // Build Context
+  let contextResult;
+  try {
+    contextResult = buildContext({
+      cwd,
+      targetFile: options.file,
+      contextFiles: options.files,
+      contextDir: options.dir,
+      ignorePatterns: config?.context?.ignore_patterns || []
     });
-    throw new SecurityBlockError(`Security violation. Found potential secret (${scanResult.type}) in context file.`);
+  } catch (error: any) {
+    if (error instanceof SecurityBlockError) {
+      saveResult({
+        status: "blocked",
+        detectedSecretType: error.type,
+        response: null
+      });
+    }
+    throw error;
   }
 
-  // Ensure run directory exists for caller to write additional files (like proposed.diff)
-  fs.mkdirSync(runsDir, { recursive: true });
+  const { targetContent, targetFile, contextString, contextFilesMeta } = contextResult;
+
+  // Print warnings for omitted files
+  const omitted = contextFilesMeta.filter(f => !f.included);
+  if (omitted.length > 0) {
+    console.log(chalk.yellow(`\n[WARNING] ${omitted.length} file(s) were omitted from context.`));
+    omitted.forEach(f => {
+      console.log(chalk.yellow(`  - ${f.path} (${f.reason})`));
+    });
+    console.log('');
+  }
+
+  // Update base payload with files info so that all subsequent saveResult calls include it
+  Object.assign(basePayload, {
+    ...(targetFile ? { targetFile } : {}),
+    ...(contextFilesMeta.length > 0 ? { contextFiles: contextFilesMeta } : {})
+  });
 
   return {
     provider,
@@ -125,9 +125,10 @@ export function setupRunContext(options: SetupRunContextOptions) {
     timestamp,
     runsDir,
     resultPath,
-    contextContent,
-    fileName,
-    relativePath,
+    targetContent,
+    targetFile,
+    contextString,
+    contextFilesMeta,
     saveResult
   };
 }

@@ -3,19 +3,34 @@ import chalk from 'chalk';
 import { setupRunContext, SecurityBlockError } from '../core/run-context.js';
 
 export const askCommand = new Command('ask')
-  .description('Ask a question about a specific file context')
-  .argument('<question>', 'The question to ask about the file')
-  .requiredOption('-f, --file <path>', 'The file to use as context')
+  .description('Ask a question about a specific context')
+  .argument('<question>', 'The question to ask about the context')
+  .option('-f, --file <path>', 'A single file to use as context')
+  .option('--files <paths>', 'Comma-separated list of files to use as context')
+  .option('--dir <path>', 'A directory to use as context (recursive)')
   .option('-p, --provider <name>', 'Override AI provider')
   .option('-m, --model <name>', 'Override AI model')
   .option('--dry-run', 'Prepare the request but do not send it to the AI provider')
-  .action(async (question: string, options: { provider?: string, model?: string, file: string, dryRun?: boolean }) => {
+  .action(async (question: string, options: { provider?: string, model?: string, file?: string, files?: string, dir?: string, dryRun?: boolean }) => {
+    
+    const specifiedFlags = [options.file, options.files, options.dir].filter(Boolean);
+    if (specifiedFlags.length === 0) {
+      console.error(chalk.red(`ERROR: You must specify exactly one of --file, --files, or --dir`));
+      process.exit(1);
+    }
+    if (specifiedFlags.length > 1) {
+      console.error(chalk.red(`ERROR: --file, --files, and --dir are mutually exclusive.`));
+      process.exit(1);
+    }
+
     let ctx;
     
     try {
       ctx = setupRunContext({
         commandName: 'ask',
         file: options.file,
+        files: options.files ? options.files.split(',').map(f => f.trim()) : undefined,
+        dir: options.dir,
         providerOverride: options.provider,
         modelOverride: options.model,
         prompt: question
@@ -29,10 +44,8 @@ export const askCommand = new Command('ask')
       }
       process.exit(1);
     }
-
-    console.log(chalk.yellow(`Attached context file: ${options.file}`));
     
-    const fullPrompt = `Context:\n${ctx.contextContent}\n\nQuestion: ${question}`;
+    const fullPrompt = `Context:\n${ctx.contextString}\n\nQuestion: ${question}`;
     
     if (options.dryRun) {
       console.log(chalk.blue(`\n[DRY RUN] Prompt prepared:`));
