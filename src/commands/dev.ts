@@ -13,7 +13,8 @@ export const devCommand = new Command('dev')
   .option('--context-dir <path>', 'A directory of additional files for read-only context (recursive)')
   .option('-p, --provider <name>', 'Override AI provider')
   .option('-m, --model <name>', 'Override AI model')
-  .action(async (task: string, options: { provider?: string, model?: string, file: string, contextFiles?: string, contextDir?: string }) => {
+  .option('--dry-run', 'Prepare the request but do not send it to the AI provider')
+  .action(async (task: string, options: { provider?: string, model?: string, file: string, contextFiles?: string, contextDir?: string, dryRun?: boolean }) => {
     let ctx;
     
     try {
@@ -43,6 +44,19 @@ export const devCommand = new Command('dev')
     const systemInstruction = `[SYSTEM]: You are an automated code editor. You must return ONLY the complete, fully updated content of the target file. Do not include any explanations, greetings, or markdown code blocks (like \`\`\`). Preserve the original code style, indentation, and formatting except where the requested change requires otherwise. Provide the raw text exactly as it should be saved.`;
     const backgroundContext = ctx.contextString ? `Background Context:\n${ctx.contextString}\n\n` : '';
     const fullPrompt = `${systemInstruction}\n\n${backgroundContext}Task:\n${task}\n\nFile Content to modify:\n${ctx.targetContent}`;
+
+    if (options.dryRun) {
+      console.log(chalk.blue(`\n[DRY RUN] Prompt prepared:`));
+      console.log(fullPrompt);
+      
+      ctx.saveResult({
+        status: "dry-run",
+        response: null
+      });
+      
+      console.log(chalk.dim(`\n[Saved dry-run event to .omniqa/runs/${ctx.timestamp}_dev/result.json]`));
+      return;
+    }
 
     try {
       const response = await ctx.provider.send({ prompt: fullPrompt, context: undefined });
